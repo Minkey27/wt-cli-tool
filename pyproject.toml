@@ -1,0 +1,32 @@
+[project]
+name = "wt"
+version = "0.1.0"
+description = "TUI for managing git worktrees and their docker compose stacks"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "textual>=0.80",
+]
+
+[project.scripts]
+wt = "wt.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wt"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
