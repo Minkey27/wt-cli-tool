@@ -11,6 +11,7 @@ from textual.widgets import DataTable, Footer, Header, Static
 
 from wt import compose, worktrees
 from wt.compose import Status
+from wt.modals import ConfirmTeardownModal, ErrorModal
 
 STATUS_DISPLAY: dict[Status, tuple[str, str]] = {
     Status.RUNNING: ("● running", "green"),
@@ -36,6 +37,8 @@ class WtApp(App):
     BINDINGS = [
         Binding("s", "start_selected", "Start"),
         Binding("x", "stop_selected", "Stop"),
+        Binding("t", "teardown_selected", "Teardown"),
+        Binding("enter", "show_error", "Show Error", show=False),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
         Binding("ctrl+c", "quit", "Quit", show=False),
@@ -172,6 +175,61 @@ class WtApp(App):
         lines = [ln for ln in output.strip().splitlines() if ln.strip()]
         snippet = " | ".join(lines[-3:]) if lines else "command failed"
         self._show_toast(f"action failed: {snippet}")
+
+    def action_teardown_selected(self) -> None:
+        key = self._selected_row_key()
+        if key is None:
+            return
+        info = self._rows[key]
+        if info.locked:
+            return
+        if info.wt.is_main:
+            self._show_toast("main worktree cannot be torn down")
+            return
+        if info.wt.path == self._cwd or self._cwd.is_relative_to(info.wt.path):
+            self._show_toast("cd elsewhere first — this is your current directory")
+            return
+
+        def proceed(confirmed: bool | None) -> None:
+            if confirmed:
+                self.run_worker(self._do_teardown(key), exclusive=False)
+
+        self.push_screen(
+            ConfirmTeardownModal(info.wt.branch or info.wt.head[:7]),
+            proceed,
+        )
+
+    async def _do_teardown(self, key: str) -> None:
+        info = self._rows[key]
+        info.locked = True
+        self._set_row_spinner(key, "tearing down")
+
+        rc, output = await compose.down(info.wt.path)
+        if rc != 0:
+            info.locked = False
+            info.last_error = output
+            self._render_error_status(key, output)
+            return
+
+        rc2, output2 = await worktrees.remove_worktree(info.wt.path)
+        if rc2 != 0:
+            info.locked = False
+            info.last_error = output2
+            self._render_error_status(key, output2)
+            return
+
+        assert self._table is not None
+        self._table.remove_row(key)
+        del self._rows[key]
+
+    def action_show_error(self) -> None:
+        key = self._selected_row_key()
+        if key is None:
+            return
+        info = self._rows[key]
+        if not info.last_error:
+            return
+        self.push_screen(ErrorModal(f"Error: {info.wt.branch or info.wt.path}", info.last_error))
 
     def action_refresh(self) -> None:
         self.refresh_states()
