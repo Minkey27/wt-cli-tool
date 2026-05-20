@@ -1,0 +1,6 @@
+[
+  {"Service": "backend", "State": "running", "Publishers": [{"PublishedPort": 8045}]},
+  {"Service": "postgres", "State": "running", "Publishers": [{"PublishedPort": 8047}]},
+  {"Service": "redis", "State": "running", "Publishers": [{"PublishedPort": 8048}]},
+  {"Service": "pgadmin", "State": "running", "Publishers": [{"PublishedPort": 8049}]}
+]

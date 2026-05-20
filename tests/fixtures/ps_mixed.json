@@ -1,0 +1,4 @@
+[
+  {"Service": "backend", "State": "running", "Publishers": [{"PublishedPort": 8120}]},
+  {"Service": "postgres", "State": "exited", "Publishers": [{"PublishedPort": 8122}]}
+]

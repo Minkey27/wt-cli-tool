@@ -1,0 +1,4 @@
+[
+  {"Service": "web", "State": "running", "Publishers": [{"PublishedPort": 3000}]},
+  {"Service": "db", "State": "running", "Publishers": [{"PublishedPort": 5432}]}
+]
