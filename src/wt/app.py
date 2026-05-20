@@ -34,6 +34,8 @@ class RowState:
 
 class WtApp(App):
     BINDINGS = [
+        Binding("s", "start_selected", "Start"),
+        Binding("x", "stop_selected", "Stop"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
         Binding("ctrl+c", "quit", "Quit", show=False),
@@ -125,6 +127,51 @@ class WtApp(App):
     def _hide_toast(self) -> None:
         assert self._toast is not None
         self._toast.display = False
+
+    def _selected_row_key(self) -> str | None:
+        assert self._table is not None
+        try:
+            row_key, _ = self._table.coordinate_to_cell_key(self._table.cursor_coordinate)
+            return None if row_key is None else str(row_key.value)
+        except Exception:
+            return None
+
+    def action_start_selected(self) -> None:
+        key = self._selected_row_key()
+        if key is None:
+            return
+        info = self._rows[key]
+        if info.status is Status.NO_COMPOSE or info.locked:
+            return
+        self.run_worker(self._run_action(key, "starting", compose.start), exclusive=False)
+
+    def action_stop_selected(self) -> None:
+        key = self._selected_row_key()
+        if key is None:
+            return
+        info = self._rows[key]
+        if info.status is Status.NO_COMPOSE or info.locked:
+            return
+        self.run_worker(self._run_action(key, "stopping", compose.stop), exclusive=False)
+
+    async def _run_action(self, key: str, label: str, fn) -> None:
+        info = self._rows[key]
+        info.locked = True
+        self._set_row_spinner(key, label)
+        rc, output = await fn(info.wt.path)
+        info.locked = False
+        if rc != 0:
+            info.last_error = output
+            self._render_error_status(key, output)
+        else:
+            await self._refresh_row(key)
+
+    def _render_error_status(self, key: str, output: str) -> None:
+        assert self._table is not None
+        self._table.update_cell(key, "status", Text("✗ error", style="bold red"))
+        lines = [ln for ln in output.strip().splitlines() if ln.strip()]
+        snippet = " | ".join(lines[-3:]) if lines else "command failed"
+        self._show_toast(f"action failed: {snippet}")
 
     def action_refresh(self) -> None:
         self.refresh_states()
