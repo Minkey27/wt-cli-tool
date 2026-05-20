@@ -1,0 +1,24 @@
+# Local-only design specs (not committed; mirrors the deurdoor docs/superpowers/ pattern)
+docs/specs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# uv / venv
+.venv/
+uv.lock
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Pytest
+.pytest_cache/
+.coverage
