@@ -1,0 +1,17 @@
+worktree /Users/yyung/Projects/deurdoor
+HEAD 8ccc94c0123456789abcdef0123456789abcdef0
+branch refs/heads/main
+
+worktree /Users/yyung/Projects/worktrees/bpz-580-improve-download
+HEAD 8476d629500000000000000000000000000000ab
+branch refs/heads/bpz-580-improve-download
+
+worktree /Users/yyung/Projects/worktrees/detached-experiment
+HEAD c5557179fab00000000000000000000000000abc
+detached
+
+worktree /Users/yyung/Projects/worktrees/locked-branch
+HEAD 5442e640e00000000000000000000000000000ab
+branch refs/heads/locked-branch
+locked
+
