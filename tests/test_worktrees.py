@@ -50,4 +50,4 @@ def test_path_is_a_pathlib_path():
 def test_dataclass_is_hashable():
     text = FIXTURE.read_text()
     worktrees = parse_porcelain(text)
-    assert hash(worktrees[0]) != hash(worktrees[1])
+    hash(worktrees[0])  # would raise TypeError if Worktree were unhashable

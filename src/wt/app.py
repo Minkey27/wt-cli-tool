@@ -27,6 +27,7 @@ class RowState:
 
     def __init__(self, wt: worktrees.Worktree) -> None:
         self.wt = wt
+        self.resolved_path = wt.path.resolve()
         self.status: Status | None = None
         self.url: str | None = None
         self.locked: bool = False  # True while an action is in flight
@@ -89,7 +90,7 @@ class WtApp(App):
             self._table.add_row(label, "…", "—", _abbrev_path(wt.path), key=row_key)
         self.sub_title = f"{len(wts)} worktrees"
 
-    @work(exclusive=False)
+    @work(exclusive=True, group="refresh")
     async def refresh_states(self) -> None:
         tasks = [self._refresh_row(key) for key, info in self._rows.items() if not info.locked]
         if tasks:
@@ -186,8 +187,8 @@ class WtApp(App):
         if info.wt.is_main:
             self._show_toast("main worktree cannot be torn down")
             return
-        if info.wt.path == self._cwd or self._cwd.is_relative_to(info.wt.path):
-            self._show_toast("cd elsewhere first — this is your current directory")
+        if info.resolved_path == self._cwd or self._cwd.is_relative_to(info.resolved_path):
+            self._show_toast("cd out of this worktree first — your shell is inside it")
             return
 
         def proceed(confirmed: bool | None) -> None:

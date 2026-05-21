@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from wt.compose import Status, compute_status, extract_webapp_url, parse_ps_output
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -72,6 +74,6 @@ def test_parse_ps_output_handles_array():
     assert len(services) == 4
 
 
-def test_parse_ps_output_handles_empty_string():
-    assert parse_ps_output("") == []
-    assert parse_ps_output("   \n  ") == []
+@pytest.mark.parametrize("text", ["", "   \n  "])
+def test_parse_ps_output_handles_empty_string(text: str):
+    assert parse_ps_output(text) == []
