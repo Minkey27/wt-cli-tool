@@ -29,19 +29,6 @@ Slightly slower startup, but always live against the source.
 
 Run `wt` from inside any git repo. The TUI lists every worktree of that repo and lets you act on each.
 
-```
-┌─ wt ───────────────────────────────────────────────────────────────────────┐
-│ Repo: deurdoor    Worktrees: 7                            Refresh: auto 2s │
-├────────────────────────────────────────────────────────────────────────────┤
-│  BRANCH                              STATUS    URL                  PATH   │
-│ ▸bpz-580-improve-download-overlay…  ● running http://localhost:8045 …/bpz-580│
-│  bpz-629-propagate-kozijnspec-dim…  ○ stopped —                     …/bpz-629│
-│  main                               ─ no-comp —                     ~/Proj/…│
-├────────────────────────────────────────────────────────────────────────────┤
-│ [s] start   [x] stop   [t] teardown   [r] refresh   [q] quit               │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
 ### Keybindings
 
 | Key | Action |
