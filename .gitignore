@@ -1,5 +1,6 @@
-# Local-only design specs (not committed; mirrors the deurdoor docs/superpowers/ pattern)
+# Local-only design specs and plans (not committed)
 docs/specs/
+docs/superpowers/
 
 # Python
 __pycache__/
@@ -22,3 +23,7 @@ uv.lock
 # Pytest
 .pytest_cache/
 .coverage
+.test-output.txt
+
+# Claude Code
+.claude/
