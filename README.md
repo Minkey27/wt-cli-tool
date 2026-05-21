@@ -76,6 +76,7 @@ The URL column is a clickable hyperlink in modern terminals (iTerm2, Alacritty, 
 - **Discovery:** `git worktree list --porcelain` enumerates every worktree of the repo containing your current directory.
 - **Compose location:** the tool looks for a compose file (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`) at the worktree root first, then in each immediate non-hidden subdirectory (alphabetical order, first match wins). So `backend/compose.yaml` is auto-discovered without configuration. Nested deeper than one level isn't scanned.
 - **Status:** `docker compose ps --format json` runs inside the resolved compose directory. The tool parses service `State` values to compute running / partial / stopped.
+- **Refresh:** every 2 seconds (and on `r`) the tool re-runs `git worktree list` so worktrees added or removed outside the app are reflected automatically. Rows mid-action stay until they finish.
 - **URL:** the same JSON yields published ports. The tool looks for a service named `backend` (then `web`, `app`, `api`, `frontend`) and renders its first published port as `http://localhost:<port>`. If none match but exactly one service has exactly one published port, that wins.
 - **Actions:** `docker compose up -d --wait` / `stop` / `down --volumes`, plus `git worktree remove --force` for teardown. All actions run via Python's async subprocess API so the UI stays responsive — multiple actions across different worktrees run in parallel.
 - **Clickable URLs:** rendered as OSC 8 terminal hyperlinks via Rich. Falls back to plain underlined text in older terminals.
@@ -85,6 +86,10 @@ The URL column is a clickable hyperlink in modern terminals (iTerm2, Alacritty, 
 - Python 3.13+
 - `docker` and `docker compose` v2+ on PATH
 - `git` on PATH
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ## Out of scope (deferred)
 

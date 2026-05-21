@@ -46,7 +46,11 @@ def find_compose_dir(worktree: Path) -> Path | None:
     if _has_compose_file(worktree):
         return worktree
     try:
-        subdirs = sorted(p for p in worktree.iterdir() if p.is_dir() and not p.name.startswith("."))
+        subdirs = sorted(
+            p
+            for p in worktree.iterdir()
+            if not p.name.startswith(".") and p.is_dir(follow_symlinks=False)
+        )
     except OSError:
         return None
     for sub in subdirs:

@@ -8,7 +8,7 @@ from textual.widgets import Label, Static
 
 
 class ConfirmTeardownModal(ModalScreen[bool]):
-    """Yes/no modal. Returns True if user pressed 'y'."""
+    """Yes/no modal. Keyboard-only. 'y' confirms; 'n'/Esc/Enter cancels; other keys ignored."""
 
     DEFAULT_CSS = """
     ConfirmTeardownModal {
@@ -32,10 +32,14 @@ class ConfirmTeardownModal(ModalScreen[bool]):
             yield Label(f"Teardown branch '{self._branch}'?", id="confirm-title")
             yield Static("This drops volumes and removes the worktree.")
             yield Static("")
-            yield Static("[y] yes    [any other key] cancel")
+            yield Static("y/N?")
 
     def on_key(self, event: events.Key) -> None:
-        self.dismiss(event.key.lower() == "y")
+        key = event.key.lower()
+        if key == "y":
+            self.dismiss(True)
+        elif key in ("n", "escape", "enter"):
+            self.dismiss(False)
 
 
 class ErrorModal(ModalScreen[None]):

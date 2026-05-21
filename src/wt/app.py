@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 
 from rich.text import Text
@@ -74,24 +75,42 @@ class WtApp(App):
 
     async def on_mount(self) -> None:
         self.title = f"wt — {self._repo_root.name}"
-        await self._reload_worktrees()
+        await self._reconcile_worktrees()
         self.refresh_states()
         self.set_interval(2.0, self.refresh_states)
 
-    async def _reload_worktrees(self) -> None:
-        wts = worktrees.list_worktrees(self._cwd)
+    async def _reconcile_worktrees(self) -> None:
+        """Sync the table to current `git worktree list` output.
+
+        Adds rows for new worktrees. Removes rows whose worktree has
+        disappeared, except for rows currently locked by an in-flight
+        action — those are kept so the running worker can finish.
+        Surviving rows keep their cached status / url / lock / error state.
+        """
+        try:
+            wts = await asyncio.to_thread(worktrees.list_worktrees, self._cwd)
+        except Exception:
+            return
         assert self._table is not None
-        self._table.clear(columns=False)
-        self._rows.clear()
+        new_keys = {str(wt.path) for wt in wts}
+        for key in list(self._rows):
+            if key in new_keys or self._rows[key].locked:
+                continue
+            with contextlib.suppress(Exception):
+                self._table.remove_row(key)
+            del self._rows[key]
         for wt in wts:
+            key = str(wt.path)
+            if key in self._rows:
+                continue
             label = wt.branch or f"(detached {wt.head[:7]})"
-            row_key = str(wt.path)
-            self._rows[row_key] = RowState(wt)
-            self._table.add_row(label, "…", "—", _abbrev_path(wt.path), key=row_key)
-        self.sub_title = f"{len(wts)} worktrees"
+            self._rows[key] = RowState(wt)
+            self._table.add_row(label, "…", "—", _abbrev_path(wt.path), key=key)
+        self.sub_title = f"{len(self._rows)} worktrees"
 
     @work(exclusive=True, group="refresh")
     async def refresh_states(self) -> None:
+        await self._reconcile_worktrees()
         tasks = [self._refresh_row(key) for key, info in self._rows.items() if not info.locked]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
