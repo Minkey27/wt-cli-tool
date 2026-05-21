@@ -2,6 +2,8 @@
 
 A terminal UI for managing git worktrees alongside their docker compose stacks.
 
+![wt demo](docs/img/demo.svg)
+
 ## Why
 
 Working across many feature branches with heavy docker compose stacks (one backend + postgres + redis + pgadmin per worktree) means a lot of `cd`-and-`docker compose stop` ceremony. `wt` replaces that with a single dashboard: see every worktree's status at a glance, click through to the running webapp, and start/stop/teardown with a single keystroke.
