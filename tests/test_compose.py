@@ -3,7 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from wt.compose import Status, compute_status, extract_webapp_url, parse_ps_output
+from wt.compose import (
+    Status,
+    compute_status,
+    extract_webapp_url,
+    find_compose_dir,
+    parse_ps_output,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -77,3 +83,53 @@ def test_parse_ps_output_handles_array():
 @pytest.mark.parametrize("text", ["", "   \n  "])
 def test_parse_ps_output_handles_empty_string(text: str):
     assert parse_ps_output(text) == []
+
+
+def test_find_compose_dir_root(tmp_path: Path):
+    (tmp_path / "compose.yaml").write_text("")
+    assert find_compose_dir(tmp_path) == tmp_path
+
+
+def test_find_compose_dir_subdir(tmp_path: Path):
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "backend" / "compose.yaml").write_text("")
+    assert find_compose_dir(tmp_path) == tmp_path / "backend"
+
+
+def test_find_compose_dir_root_wins_over_subdir(tmp_path: Path):
+    (tmp_path / "compose.yaml").write_text("")
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "backend" / "compose.yaml").write_text("")
+    assert find_compose_dir(tmp_path) == tmp_path
+
+
+def test_find_compose_dir_none_when_missing(tmp_path: Path):
+    assert find_compose_dir(tmp_path) is None
+
+
+def test_find_compose_dir_does_not_descend_past_depth_one(tmp_path: Path):
+    nested = tmp_path / "a" / "b"
+    nested.mkdir(parents=True)
+    (nested / "compose.yaml").write_text("")
+    assert find_compose_dir(tmp_path) is None
+
+
+def test_find_compose_dir_skips_hidden_subdirs(tmp_path: Path):
+    hidden = tmp_path / ".git"
+    hidden.mkdir()
+    (hidden / "compose.yaml").write_text("")
+    assert find_compose_dir(tmp_path) is None
+
+
+def test_find_compose_dir_alphabetical_when_multiple_subdirs(tmp_path: Path):
+    (tmp_path / "zebra").mkdir()
+    (tmp_path / "alpha").mkdir()
+    (tmp_path / "zebra" / "compose.yaml").write_text("")
+    (tmp_path / "alpha" / "compose.yaml").write_text("")
+    assert find_compose_dir(tmp_path) == tmp_path / "alpha"
+
+
+def test_find_compose_dir_accepts_alternate_filenames(tmp_path: Path):
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "backend" / "docker-compose.yml").write_text("")
+    assert find_compose_dir(tmp_path) == tmp_path / "backend"

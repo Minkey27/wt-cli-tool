@@ -36,19 +36,39 @@ class ComposeState:
     webapp_url: str | None
 
 
-def has_compose_file(worktree: Path) -> bool:
-    return any((worktree / name).exists() for name in COMPOSE_FILE_NAMES)
+def find_compose_dir(worktree: Path) -> Path | None:
+    """Locate the directory containing a compose file.
+
+    Checks the worktree root first; if absent, scans immediate (non-hidden)
+    subdirectories in alphabetical order. Returns None if no compose file is
+    found at depth 0 or depth 1.
+    """
+    if _has_compose_file(worktree):
+        return worktree
+    try:
+        subdirs = sorted(p for p in worktree.iterdir() if p.is_dir() and not p.name.startswith("."))
+    except OSError:
+        return None
+    for sub in subdirs:
+        if _has_compose_file(sub):
+            return sub
+    return None
+
+
+def _has_compose_file(directory: Path) -> bool:
+    return any((directory / name).exists() for name in COMPOSE_FILE_NAMES)
 
 
 async def get_state(worktree: Path) -> ComposeState:
     """Fetch compose state for a worktree. Never raises — wraps errors in Status.ERROR."""
-    if not has_compose_file(worktree):
+    compose_dir = find_compose_dir(worktree)
+    if compose_dir is None:
         return ComposeState(Status.NO_COMPOSE, None)
 
     try:
         proc = await _spawn(
             ["docker", "compose", "ps", "--format", "json"],
-            cwd=worktree,
+            cwd=compose_dir,
             capture_stderr=True,
         )
         stdout, _ = await proc.communicate()
@@ -129,7 +149,8 @@ async def down(worktree: Path) -> tuple[int, str]:
     return await _run(worktree, ["docker", "compose", "down", "--volumes"])
 
 
-async def _run(cwd: Path, cmd: list[str]) -> tuple[int, str]:
+async def _run(worktree: Path, cmd: list[str]) -> tuple[int, str]:
+    cwd = find_compose_dir(worktree) or worktree
     proc = await _spawn(cmd, cwd=cwd, capture_stderr=False)
     out, _ = await proc.communicate()
     return proc.returncode, out.decode("utf-8", errors="replace")
