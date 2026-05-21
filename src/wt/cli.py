@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,8 +21,11 @@ def main(argv: list[str] | None = None) -> int:
     cwd = Path.cwd()
     try:
         root = repo_root(cwd)
-    except Exception as e:
-        print(f"wt: not inside a git repository ({e.__class__.__name__})", file=sys.stderr)
+    except FileNotFoundError:
+        print("wt: 'git' binary not found on PATH", file=sys.stderr)
+        return 2
+    except subprocess.CalledProcessError:
+        print("wt: not inside a git repository", file=sys.stderr)
         return 2
 
     WtApp(repo_root=root, cwd=cwd).run()

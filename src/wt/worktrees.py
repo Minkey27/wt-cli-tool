@@ -28,6 +28,7 @@ def list_worktrees(cwd: Path | None = None) -> list[Worktree]:
 
 
 def parse_porcelain(text: str) -> list[Worktree]:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     blocks = [block for block in text.strip().split("\n\n") if block.strip()]
     return [_parse_block(block, is_main=(i == 0)) for i, block in enumerate(blocks)]
 
