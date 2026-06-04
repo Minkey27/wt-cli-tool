@@ -96,9 +96,7 @@ class WtApp(App):
         for key in list(self._rows):
             if key in new_keys or self._rows[key].locked:
                 continue
-            with contextlib.suppress(Exception):
-                self._table.remove_row(key)
-            del self._rows[key]
+            self._remove_row(key)
         for wt in wts:
             key = str(wt.path)
             if key in self._rows:
@@ -136,6 +134,23 @@ class WtApp(App):
             )
         else:
             self._table.update_cell(key, "url", Text("—", style="dim"))
+
+    def _remove_row(self, key: str) -> None:
+        """Drop a row from the table and forget its state, keeping the cursor on
+        the same logical worktree (see `_cursor_after_removal`)."""
+        assert self._table is not None
+        try:
+            deleted_idx = self._table.get_row_index(key)
+        except Exception:
+            deleted_idx = None
+        cursor_row = self._table.cursor_coordinate.row
+        with contextlib.suppress(Exception):
+            self._table.remove_row(key)
+        self._rows.pop(key, None)
+        if deleted_idx is not None and self._table.row_count:
+            self._table.move_cursor(
+                row=_cursor_after_removal(deleted_idx, cursor_row, self._table.row_count)
+            )
 
     def _set_row_spinner(self, key: str, label: str) -> None:
         assert self._table is not None
@@ -238,9 +253,7 @@ class WtApp(App):
             self._render_error_status(key, output2)
             return
 
-        assert self._table is not None
-        self._table.remove_row(key)
-        del self._rows[key]
+        self._remove_row(key)
 
     def action_show_error(self) -> None:
         key = self._selected_row_key()
@@ -253,6 +266,22 @@ class WtApp(App):
 
     def action_refresh(self) -> None:
         self.refresh_states()
+
+
+def _cursor_after_removal(deleted_idx: int, cursor_row: int, remaining: int) -> int:
+    """Row index the cursor should occupy after the row at `deleted_idx` is removed.
+
+    `cursor_row` is the cursor's index before removal; `remaining` is the number
+    of rows left afterwards. Keeps the cursor on the same logical worktree: a
+    deletion below the cursor leaves it put, a deletion at-or-above it shifts the
+    cursor up one so it tracks the same row (and, when the selected row itself is
+    torn down, lands on the row above rather than silently inheriting whatever
+    slid up). The result is always clamped into `[0, remaining - 1]`.
+    """
+    if remaining <= 0:
+        return 0
+    target = cursor_row - 1 if deleted_idx <= cursor_row else cursor_row
+    return max(0, min(target, remaining - 1))
 
 
 def _abbrev_path(path: Path) -> str:
