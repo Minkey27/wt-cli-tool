@@ -1,8 +1,10 @@
+import asyncio
 import json
 from pathlib import Path
 
 import pytest
 
+from wt import compose
 from wt.compose import (
     Status,
     compute_status,
@@ -133,3 +135,17 @@ def test_find_compose_dir_accepts_alternate_filenames(tmp_path: Path):
     (tmp_path / "backend").mkdir()
     (tmp_path / "backend" / "docker-compose.yml").write_text("")
     assert find_compose_dir(tmp_path) == tmp_path / "backend"
+
+
+def test_down_removes_locally_built_images(monkeypatch, tmp_path: Path):
+    captured: dict[str, list[str]] = {}
+
+    async def fake_run(worktree: Path, cmd: list[str]) -> tuple[int, str]:
+        captured["cmd"] = cmd
+        return 0, ""
+
+    monkeypatch.setattr(compose, "_run", fake_run)
+    rc, _ = asyncio.run(compose.down(tmp_path))
+
+    assert rc == 0
+    assert captured["cmd"] == ["docker", "compose", "down", "--volumes", "--rmi", "local"]

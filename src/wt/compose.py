@@ -150,7 +150,11 @@ async def stop(worktree: Path) -> tuple[int, str]:
 
 
 async def down(worktree: Path) -> tuple[int, str]:
-    return await _run(worktree, ["docker", "compose", "down", "--volumes"])
+    # --rmi local reclaims the worktree's locally-built image on teardown so
+    # per-worktree churn doesn't accumulate disk. Only removes images with no
+    # custom tag (the app image), leaving pulled bases and shared layers intact;
+    # images still used by another container are skipped without failing.
+    return await _run(worktree, ["docker", "compose", "down", "--volumes", "--rmi", "local"])
 
 
 async def _run(worktree: Path, cmd: list[str]) -> tuple[int, str]:

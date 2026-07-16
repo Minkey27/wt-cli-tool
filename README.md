@@ -67,7 +67,8 @@ The URL column is a clickable hyperlink in modern terminals (iTerm2, Alacritty, 
 - **Status:** `docker compose ps --format json` runs inside the resolved compose directory. The tool parses service `State` values to compute running / partial / stopped.
 - **Refresh:** every 2 seconds (and on `r`) the tool re-runs `git worktree list` so worktrees added or removed outside the app are reflected automatically. Rows mid-action stay until they finish.
 - **URL:** the same JSON yields published ports. The tool looks for a service named `backend` (then `web`, `app`, `api`, `frontend`) and renders its first published port as `http://localhost:<port>`. If none match but exactly one service has exactly one published port, that wins.
-- **Actions:** `docker compose up -d --wait` / `stop` / `down --volumes`, plus `git worktree remove --force` for teardown. All actions run via Python's async subprocess API so the UI stays responsive — multiple actions across different worktrees run in parallel.
+- **Actions:** `docker compose up -d --wait` / `stop` / `down --volumes --rmi local`, plus `git worktree remove --force` for teardown. All actions run via Python's async subprocess API so the UI stays responsive — multiple actions across different worktrees run in parallel.
+- **Teardown reclaims disk:** `down` passes `--rmi local`, so tearing down a worktree also removes the image compose built for it. Only locally-built images (no custom `image:` tag) are removed; pulled bases and layers shared with other worktrees stay. Next `up` in a fresh worktree rebuilds just the changed app layers — dependency layers come from BuildKit's cache. To reclaim that build cache periodically (it grows across all projects and teardown can't safely touch it), run `docker builder prune` yourself.
 - **Clickable URLs:** rendered as OSC 8 terminal hyperlinks via Rich. Falls back to plain underlined text in older terminals.
 
 ## Requirements
