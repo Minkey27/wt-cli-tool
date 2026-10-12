@@ -41,7 +41,9 @@ Run `wt` from inside any git repo. The TUI lists every worktree of that repo and
 | `r` | Manual refresh |
 | `q` / `Ctrl+C` | Quit |
 
-The URL column is a clickable hyperlink in modern terminals (iTerm2, Alacritty, kitty, Ghostty, WezTerm). Click to open the running backend in your browser.
+The URL column is a clickable hyperlink in modern terminals (iTerm2, Alacritty, kitty, Ghostty, WezTerm). Cmd+click (or your terminal's link modifier) to open the running backend in your browser.
+
+Double-click a Branch, URL or Path cell to copy its full value to the clipboard (Path copies the unabbreviated path; a detached HEAD's Branch cell copies the full commit SHA). Cmd+click on the URL still opens it.
 
 ### Status indicators
 

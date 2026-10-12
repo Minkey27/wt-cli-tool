@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import subprocess
 from pathlib import Path
 
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.coordinate import Coordinate
+from textual.message import Message
 from textual.widgets import DataTable, Footer, Header, Static
 
 from wt import compose, worktrees
@@ -33,6 +36,28 @@ class RowState:
         self.url: str | None = None
         self.locked: bool = False  # True while an action is in flight
         self.last_error: str | None = None
+
+
+class WorktreeTable(DataTable):
+    """DataTable that reports double-clicked cells so the app can copy their value.
+
+    Lives on the widget because DataTable stops Click events from bubbling. A
+    double-click never involves cmd, so the URL column's cmd+click link still works.
+    """
+
+    class CellDoubleClicked(Message):
+        def __init__(self, row_key: str, column_key: str) -> None:
+            super().__init__()
+            self.row_key = row_key
+            self.column_key = column_key
+
+    def on_click(self, event: events.Click) -> None:
+        meta = event.style.meta
+        # Empty space right of the last column reports column 0, hence out_of_bounds.
+        if event.chain != 2 or meta.get("row", -1) < 0 or meta.get("out_of_bounds"):
+            return
+        row_key, column_key = self.coordinate_to_cell_key(Coordinate(meta["row"], meta["column"]))
+        self.post_message(self.CellDoubleClicked(row_key.value, column_key.value))
 
 
 class WtApp(App):
@@ -62,7 +87,7 @@ class WtApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        self._table = DataTable(cursor_type="row", zebra_stripes=False)
+        self._table = WorktreeTable(cursor_type="row", zebra_stripes=False)
         self._table.add_column("Branch", key="branch", width=40)
         self._table.add_column("Status", key="status", width=12)
         self._table.add_column("URL", key="url", width=26)
@@ -174,6 +199,22 @@ class WtApp(App):
         except Exception:
             return None
 
+    def on_worktree_table_cell_double_clicked(
+        self, message: WorktreeTable.CellDoubleClicked
+    ) -> None:
+        """Copy the double-clicked Branch, URL or Path cell's full value."""
+        info = self._rows.get(message.row_key)
+        if info is None:
+            return
+        value = {
+            "branch": info.wt.branch or info.wt.head,
+            "url": info.url,
+            "path": str(info.wt.path),
+        }.get(message.column_key)
+        if value:
+            _copy_text(self, value)
+            self.notify(f"Copied {value}", markup=False)
+
     def action_start_selected(self) -> None:
         key = self._selected_row_key()
         if key is None:
@@ -282,6 +323,15 @@ def _cursor_after_removal(deleted_idx: int, cursor_row: int, remaining: int) -> 
         return 0
     target = cursor_row - 1 if deleted_idx <= cursor_row else cursor_row
     return max(0, min(target, remaining - 1))
+
+
+def _copy_text(app: App, text: str) -> None:
+    """Copy `text` to the system clipboard. pbcopy works in every macOS terminal;
+    Textual's OSC 52 copy needs opt-in on iTerm2, so it's only the fallback."""
+    try:
+        subprocess.run(["pbcopy"], input=text, text=True, check=False)
+    except FileNotFoundError:
+        app.copy_to_clipboard(text)
 
 
 def _abbrev_path(path: Path) -> str:
