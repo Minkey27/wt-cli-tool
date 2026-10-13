@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,34 @@ def _branch_short_name(ref: str | None) -> str | None:
         return None
     prefix = "refs/heads/"
     return ref[len(prefix) :] if ref.startswith(prefix) else ref
+
+
+def last_claude_activity(worktree: Path, projects_dir: Path = CLAUDE_PROJECTS_DIR) -> float | None:
+    """Unix time of the latest Claude Code session activity in ``worktree``, if any.
+
+    Claude Code appends each session to a JSONL file in a directory named after
+    the session's working directory, with every non-alphanumeric character
+    replaced by ``-``. The newest file's mtime is the last time anyone talked to
+    Claude there.
+    """
+    session_dir = projects_dir / re.sub(r"[^A-Za-z0-9]", "-", str(worktree))
+    return max((p.stat().st_mtime for p in session_dir.glob("*.jsonl")), default=None)
+
+
+def last_git_activity(worktree: Path) -> float | None:
+    """Unix time HEAD last moved (commit, checkout, reset) in ``worktree``, if known.
+
+    Git appends every HEAD move to ``logs/HEAD`` in the worktree's git dir: the
+    ``.git`` directory of the main worktree, or the dir a linked worktree's
+    ``.git`` file points at (absolute, or relative with ``--relative-paths``).
+    """
+    git_dir = worktree / ".git"
+    try:
+        if git_dir.is_file():
+            git_dir = worktree / git_dir.read_text().removeprefix("gitdir:").strip()
+        return (git_dir / "logs" / "HEAD").stat().st_mtime
+    except OSError:
+        return None
 
 
 async def remove_worktree(path: Path) -> tuple[int, str]:

@@ -12,12 +12,12 @@ from wt.compose import ComposeState, Status
 WT_PATH = Path.home() / "repos" / "feature-branch-with-a-long-name"
 
 # Column x-offsets inside the table (declared width + 1 cell padding each side):
-# Branch 0-41, Status 42-55, URL 56-83, Path 84+. Row 0 sits under the header.
+# Branch 0-41, Status 42-55, Last active 56-68, URL 69-96, Path 97+. Row 0 sits under the header.
 BRANCH_CELL = (10, 1)
 STATUS_CELL = (45, 1)
-URL_CELL = (60, 1)
-PATH_CELL = (90, 1)
-PAST_LAST_COLUMN = (150, 1)  # Path content ("~/repos/...") ends around x=125
+URL_CELL = (73, 1)
+PATH_CELL = (103, 1)
+PAST_LAST_COLUMN = (150, 1)  # Path content ("~/repos/...") ends around x=138
 
 
 def _run_click(monkeypatch, offset, *, double=True, branch="feat/x", head="abc1234") -> list[str]:

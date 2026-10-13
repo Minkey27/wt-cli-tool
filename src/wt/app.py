@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import subprocess
+import time
 from pathlib import Path
 
 from rich.text import Text
@@ -34,6 +35,8 @@ class RowState:
         self.resolved_path = wt.path.resolve()
         self.status: Status | None = None
         self.url: str | None = None
+        self.last_active: float | None = None  # Unix time of last Claude session
+        self.last_git_move: float | None = None  # Unix time HEAD last moved
         self.locked: bool = False  # True while an action is in flight
         self.last_error: str | None = None
 
@@ -90,6 +93,7 @@ class WtApp(App):
         self._table = WorktreeTable(cursor_type="row", zebra_stripes=False)
         self._table.add_column("Branch", key="branch", width=40)
         self._table.add_column("Status", key="status", width=12)
+        self._table.add_column("Last active", key="activity", width=11)
         self._table.add_column("URL", key="url", width=26)
         self._table.add_column("Path", key="path")
         yield self._table
@@ -128,7 +132,7 @@ class WtApp(App):
                 continue
             label = wt.branch or f"(detached {wt.head[:7]})"
             self._rows[key] = RowState(wt)
-            self._table.add_row(label, "…", "—", _abbrev_path(wt.path), key=key)
+            self._table.add_row(label, "…", "—", "—", _abbrev_path(wt.path), key=key)
         self.sub_title = f"{len(self._rows)} worktrees"
 
     @work(exclusive=True, group="refresh")
@@ -143,6 +147,8 @@ class WtApp(App):
         state = await compose.get_state(info.wt.path)
         info.status = state.status
         info.url = state.webapp_url
+        info.last_active = worktrees.last_claude_activity(info.wt.path)
+        info.last_git_move = worktrees.last_git_activity(info.wt.path)
         self._render_row(key)
 
     def _render_row(self, key: str) -> None:
@@ -151,6 +157,9 @@ class WtApp(App):
         status = info.status or Status.NO_COMPOSE
         text, color = STATUS_DISPLAY[status]
         self._table.update_cell(key, "status", Text(text, style=color))
+        self._table.update_cell(
+            key, "activity", _activity_cell(info.last_active, info.last_git_move, time.time())
+        )
         if info.url:
             self._table.update_cell(
                 key,
@@ -332,6 +341,28 @@ def _copy_text(app: App, text: str) -> None:
         subprocess.run(["pbcopy"], input=text, text=True, check=False)
     except FileNotFoundError:
         app.copy_to_clipboard(text)
+
+
+def _activity_cell(claude: float | None, git: float | None, now: float) -> Text:
+    """Age of the last Claude session, else of the last HEAD move marked ``git``."""
+    if claude is not None:
+        return Text(_format_age(now - claude))
+    if git is not None:
+        return Text(f"git {_format_age(now - git)}", style="dim")
+    return Text("—", style="dim")
+
+
+def _format_age(seconds: float) -> str:
+    """Compact "how long ago" label, e.g. ``5m ago`` or ``3w ago``."""
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        return f"{int(seconds // 60)}m ago"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)}h ago"
+    if seconds < 14 * 86400:
+        return f"{int(seconds // 86400)}d ago"
+    return f"{int(seconds // (7 * 86400))}w ago"
 
 
 def _abbrev_path(path: Path) -> str:
