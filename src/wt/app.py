@@ -26,6 +26,15 @@ STATUS_DISPLAY: dict[Status, tuple[str, str]] = {
     Status.ERROR: ("✗ error", "red"),
 }
 
+# Sort position when sorting by status; rows not yet loaded sort last.
+STATUS_RANK: dict[Status, int] = {
+    Status.RUNNING: 0,
+    Status.PARTIAL: 1,
+    Status.ERROR: 2,
+    Status.STOPPED: 3,
+    Status.NO_COMPOSE: 4,
+}
+
 
 class RowState:
     """Mutable per-row state held by the app."""
@@ -71,6 +80,7 @@ class WtApp(App):
         Binding("t", "teardown_selected", "Teardown"),
         Binding("enter", "show_error", "Show Error", show=False),
         Binding("r", "refresh", "Refresh"),
+        Binding("o", "toggle_sort", "Sort by status"),
         Binding("q", "quit", "Quit"),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
@@ -88,6 +98,7 @@ class WtApp(App):
         self._rows: dict[str, RowState] = {}
         self._table: DataTable | None = None
         self._toast: Static | None = None
+        self._sort_by_status = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -146,6 +157,8 @@ class WtApp(App):
         tasks = [self._refresh_row(key) for key, info in self._rows.items() if not info.locked]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        if self._sort_by_status:
+            self._apply_sort()
 
     @work(exclusive=True, group="usage")
     async def refresh_usage(self) -> None:
@@ -188,6 +201,27 @@ class WtApp(App):
             )
         else:
             self._table.update_cell(key, "url", Text("—", style="dim"))
+
+    def _apply_sort(self) -> None:
+        """Order rows by status when sorting is on, else in `git worktree list`
+        order, keeping the cursor on the same worktree."""
+        assert self._table is not None
+        selected = self._selected_row_key()
+        # DataTable's sort key sees cell values, not row keys; the Path cell is unique per row.
+        order = {
+            _abbrev_path(info.wt.path): (
+                STATUS_RANK.get(info.status, len(STATUS_RANK)) if self._sort_by_status else 0,
+                i,
+            )
+            for i, info in enumerate(self._rows.values())
+        }
+        self._table.sort("path", key=order.__getitem__)
+        if selected is None:
+            return
+        row = self._table.get_row_index(selected)
+        # Only move when the row shifted, so a mouse-scrolled view isn't yanked back each refresh.
+        if row != self._table.cursor_coordinate.row:
+            self._table.move_cursor(row=row)
 
     def _remove_row(self, key: str) -> None:
         """Drop a row from the table and forget its state, keeping the cursor on
@@ -333,6 +367,17 @@ class WtApp(App):
         if not info.last_error:
             return
         self.push_screen(ErrorModal(f"Error: {info.wt.branch or info.wt.path}", info.last_error))
+
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        if event.column_key.value == "status":
+            self.action_toggle_sort()
+
+    def action_toggle_sort(self) -> None:
+        assert self._table is not None
+        self._sort_by_status = not self._sort_by_status
+        label = "Status ▾" if self._sort_by_status else "Status"
+        self._table.columns["status"].label = Text(label)
+        self._apply_sort()
 
     def action_refresh(self) -> None:
         self.refresh_states()
