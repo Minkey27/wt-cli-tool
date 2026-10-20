@@ -14,7 +14,7 @@ from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Footer, Header, Static
 
-from wt import compose, worktrees
+from wt import compose, state, worktrees
 from wt.compose import Status
 from wt.modals import ConfirmTeardownModal, ErrorModal
 
@@ -98,13 +98,13 @@ class WtApp(App):
         self._rows: dict[str, RowState] = {}
         self._table: DataTable | None = None
         self._toast: Static | None = None
-        self._sort_by_status = False
+        self._sort_by_status = state.load().get("sort_by_status", False)
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         self._table = WorktreeTable(cursor_type="row", zebra_stripes=False)
         self._table.add_column("Branch", key="branch", width=40)
-        self._table.add_column("Status", key="status", width=12)
+        self._table.add_column(self._status_label(), key="status", width=12)
         self._table.add_column("CPU", key="cpu", width=5)
         self._table.add_column("Mem", key="mem", width=5)
         self._table.add_column("Last active", key="activity", width=11)
@@ -375,9 +375,12 @@ class WtApp(App):
     def action_toggle_sort(self) -> None:
         assert self._table is not None
         self._sort_by_status = not self._sort_by_status
-        label = "Status ▾" if self._sort_by_status else "Status"
-        self._table.columns["status"].label = Text(label)
+        state.save({"sort_by_status": self._sort_by_status})
+        self._table.columns["status"].label = Text(self._status_label())
         self._apply_sort()
+
+    def _status_label(self) -> str:
+        return "Status ▾" if self._sort_by_status else "Status"
 
     def action_refresh(self) -> None:
         self.refresh_states()

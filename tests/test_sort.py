@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 from textual.widgets import DataTable
@@ -89,3 +90,26 @@ def test_clicking_status_header_sorts(monkeypatch):
 def test_sort_is_reapplied_when_a_status_changes(monkeypatch):
     *_, (order, _, _) = _run(monkeypatch, [_press_o, _start_no_compose_and_refresh])
     assert order == ["/srv/no-compose", "/srv/running", "/srv/main"]
+
+
+async def _noop(pilot, statuses):
+    pass
+
+
+def test_sort_choice_is_saved(monkeypatch, state_path):
+    _run(monkeypatch, [_press_o])
+    assert json.loads(state_path.read_text()) == {"sort_by_status": True}
+    _run(monkeypatch, [_press_o])
+    assert json.loads(state_path.read_text()) == {"sort_by_status": False}
+
+
+def test_saved_sort_choice_is_restored_on_start(monkeypatch, state_path):
+    state_path.write_text('{"sort_by_status": true}')
+    [(order, _, label)] = _run(monkeypatch, [_noop])
+    assert (order, label) == (["/srv/running", "/srv/main", "/srv/no-compose"], "Status ▾")
+
+
+def test_unreadable_state_file_starts_unsorted(monkeypatch, state_path):
+    state_path.write_text("not json")
+    [(order, _, label)] = _run(monkeypatch, [_noop])
+    assert (order, label) == (["/srv/main", "/srv/no-compose", "/srv/running"], "Status")

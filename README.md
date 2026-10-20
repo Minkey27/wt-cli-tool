@@ -39,7 +39,7 @@ Run `wt` from inside any git repo. The TUI lists every worktree of that repo and
 | `t` | Teardown: `docker compose down --volumes` + `git worktree remove --force` (confirmation required) |
 | `enter` | On an error row: open the full-stderr modal (esc to close) |
 | `r` | Manual refresh |
-| `o` | Toggle sort by status (running → partial → error → stopped → no-comp); clicking the Status header does the same |
+| `o` | Toggle sort by status (running → partial → error → stopped → no-comp); clicking the Status header does the same. The choice is remembered across sessions (`~/.local/state/wt/state.json`) |
 | `q` / `Ctrl+C` | Quit |
 
 The URL column is a clickable hyperlink in modern terminals (iTerm2, Alacritty, kitty, Ghostty, WezTerm). Cmd+click (or your terminal's link modifier) to open the running backend in your browser.
