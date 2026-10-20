@@ -11,6 +11,7 @@ from wt.compose import (
     extract_webapp_url,
     find_compose_dir,
     parse_ps_output,
+    parse_stats_output,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -149,3 +150,25 @@ def test_down_removes_locally_built_images(monkeypatch, tmp_path: Path):
 
     assert rc == 0
     assert captured["cmd"] == ["docker", "compose", "down", "--volumes", "--rmi", "local"]
+
+
+def test_parse_stats_output_maps_name_to_cpu_and_memory_bytes():
+    jsonl = (
+        '{"CPUPerc":"56.64%","MemUsage":"1.5GiB / 15.6GiB","Name":"wt-a-backend-1"}\n'
+        '{"CPUPerc":"0.08%","MemUsage":"512MiB / 15.6GiB","Name":"wt-a-postgres-1"}\n'
+        '{"CPUPerc":"0.00%","MemUsage":"0B / 0B","Name":"wt-b-redis-1"}\n'
+    )
+    assert parse_stats_output(jsonl) == {
+        "wt-a-backend-1": (56.64, 1536 * 1024**2),
+        "wt-a-postgres-1": (0.08, 512 * 1024**2),
+        "wt-b-redis-1": (0.0, 0),
+    }
+
+
+def test_parse_stats_output_skips_unsampled_and_blank_lines():
+    jsonl = (
+        '{"CPUPerc":"--","MemUsage":"-- / --","Name":"starting-1"}\n'
+        "\n"
+        '{"CPUPerc":"1.00%","MemUsage":"10KiB / 1GiB","Name":"ok-1"}\n'
+    )
+    assert parse_stats_output(jsonl) == {"ok-1": (1.0, 10 * 1024)}

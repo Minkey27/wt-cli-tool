@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -21,6 +22,8 @@ COMPOSE_FILE_NAMES: tuple[str, ...] = (
     "docker-compose.yml",
 )
 
+SIZE_UNITS: dict[str, int] = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
+
 
 class Status(Enum):
     RUNNING = "running"
@@ -34,6 +37,7 @@ class Status(Enum):
 class ComposeState:
     status: Status
     webapp_url: str | None
+    containers: tuple[str, ...] = ()  # container names, to match against `get_usage`
 
 
 def find_compose_dir(worktree: Path) -> Path | None:
@@ -86,7 +90,8 @@ async def get_state(worktree: Path) -> ComposeState:
     except json.JSONDecodeError:
         return ComposeState(Status.ERROR, None)
 
-    return ComposeState(compute_status(services), extract_webapp_url(services))
+    names = tuple(s["Name"] for s in services if s.get("Name"))
+    return ComposeState(compute_status(services), extract_webapp_url(services), names)
 
 
 def parse_ps_output(text: str) -> list[dict]:
@@ -97,6 +102,53 @@ def parse_ps_output(text: str) -> list[dict]:
     if text.startswith("["):
         return json.loads(text)
     return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+async def get_usage() -> dict[str, tuple[float, int]]:
+    """CPU % and memory bytes of every running container, keyed by container name.
+
+    One call covers all worktrees; it takes ~2s because docker samples CPU over an
+    interval. Never raises — returns {} on failure.
+    """
+    try:
+        proc = await _spawn(
+            ["docker", "stats", "--no-stream", "--format", "json"],
+            cwd=Path.home(),
+            capture_stderr=True,
+        )
+        stdout, _ = await proc.communicate()
+    except FileNotFoundError:
+        return {}
+    if proc.returncode != 0:
+        return {}
+    return parse_stats_output(stdout.decode())
+
+
+def parse_stats_output(text: str) -> dict[str, tuple[float, int]]:
+    """Parse `docker stats --format json` JSONL into {name: (cpu %, mem bytes)}.
+
+    Skips lines that don't parse, e.g. a container docker couldn't sample yet (``--``).
+    """
+    usage = {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+            cpu = float(row["CPUPerc"].rstrip("%"))
+            mem = _parse_size(row["MemUsage"].split("/")[0])
+            usage[row["Name"]] = (cpu, mem)
+        except (json.JSONDecodeError, KeyError, ValueError):
+            continue
+    return usage
+
+
+def _parse_size(text: str) -> int:
+    """Parse a docker binary size such as ``1.602GiB`` into bytes."""
+    match = re.fullmatch(r"([\d.]+)([A-Za-z]+)", text.strip())
+    if match is None or match[2] not in SIZE_UNITS:
+        raise ValueError(f"unrecognised size: {text!r}")
+    return int(float(match[1]) * SIZE_UNITS[match[2]])
 
 
 def compute_status(services: list[dict]) -> Status:

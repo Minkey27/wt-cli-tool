@@ -35,6 +35,7 @@ class RowState:
         self.resolved_path = wt.path.resolve()
         self.status: Status | None = None
         self.url: str | None = None
+        self.containers: tuple[str, ...] = ()  # compose container names, for usage
         self.last_active: float | None = None  # Unix time of last Claude session
         self.last_git_move: float | None = None  # Unix time HEAD last moved
         self.locked: bool = False  # True while an action is in flight
@@ -93,6 +94,8 @@ class WtApp(App):
         self._table = WorktreeTable(cursor_type="row", zebra_stripes=False)
         self._table.add_column("Branch", key="branch", width=40)
         self._table.add_column("Status", key="status", width=12)
+        self._table.add_column("CPU", key="cpu", width=5)
+        self._table.add_column("Mem", key="mem", width=5)
         self._table.add_column("Last active", key="activity", width=11)
         self._table.add_column("URL", key="url", width=26)
         self._table.add_column("Path", key="path")
@@ -107,6 +110,8 @@ class WtApp(App):
         await self._reconcile_worktrees()
         self.refresh_states()
         self.set_interval(2.0, self.refresh_states)
+        self.refresh_usage()
+        self.set_interval(5.0, self.refresh_usage)
 
     async def _reconcile_worktrees(self) -> None:
         """Sync the table to current `git worktree list` output.
@@ -132,7 +137,7 @@ class WtApp(App):
                 continue
             label = wt.branch or f"(detached {wt.head[:7]})"
             self._rows[key] = RowState(wt)
-            self._table.add_row(label, "…", "—", "—", _abbrev_path(wt.path), key=key)
+            self._table.add_row(label, "…", "—", "—", "—", "—", _abbrev_path(wt.path), key=key)
         self.sub_title = f"{len(self._rows)} worktrees"
 
     @work(exclusive=True, group="refresh")
@@ -142,11 +147,26 @@ class WtApp(App):
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    @work(exclusive=True, group="usage")
+    async def refresh_usage(self) -> None:
+        """Sum each stack's container CPU and memory from one `docker stats` call.
+
+        Runs on its own slower interval: the call takes ~2s, as long as the
+        status refresh cycle.
+        """
+        usage = await compose.get_usage()
+        assert self._table is not None
+        for key, info in self._rows.items():
+            cpu, mem = _usage_cells([usage[n] for n in info.containers if n in usage])
+            self._table.update_cell(key, "cpu", cpu)
+            self._table.update_cell(key, "mem", mem)
+
     async def _refresh_row(self, key: str) -> None:
         info = self._rows[key]
         state = await compose.get_state(info.wt.path)
         info.status = state.status
         info.url = state.webapp_url
+        info.containers = state.containers
         info.last_active = worktrees.last_claude_activity(info.wt.path)
         info.last_git_move = worktrees.last_git_activity(info.wt.path)
         self._render_row(key)
@@ -316,6 +336,7 @@ class WtApp(App):
 
     def action_refresh(self) -> None:
         self.refresh_states()
+        self.refresh_usage()
 
 
 def _cursor_after_removal(deleted_idx: int, cursor_row: int, remaining: int) -> int:
@@ -350,6 +371,22 @@ def _activity_cell(claude: float | None, git: float | None, now: float) -> Text:
     if git is not None:
         return Text(f"git {_format_age(now - git)}", style="dim")
     return Text("—", style="dim")
+
+
+def _usage_cells(samples: list[tuple[float, int]]) -> tuple[Text, Text]:
+    """Summed CPU % and memory of a stack's running containers; dashes when none run."""
+    if not samples:
+        return Text("—", style="dim"), Text("—", style="dim")
+    cpu = sum(c for c, _ in samples)
+    mem = sum(m for _, m in samples)
+    return Text(f"{cpu:.0f}%"), Text(_format_bytes(mem))
+
+
+def _format_bytes(n: int) -> str:
+    """Compact memory label, e.g. ``515M`` or ``1.9G``."""
+    if n >= 1024**3:
+        return f"{n / 1024**3:.1f}G"
+    return f"{n / 1024**2:.0f}M"
 
 
 def _format_age(seconds: float) -> str:
